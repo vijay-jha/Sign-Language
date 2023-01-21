@@ -92,21 +92,27 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         ));
   }
 
-  void _recordVideo() async {
-    if (_isRecording) {
-      final file = await _controller.stopVideoRecording();
-      setState(() => _isRecording = false);
-      final route = MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => VideoPage(filePath: file.path),
-      );
-      Navigator.push(context, route);
-    } else {
-      await _controller.prepareForVideoRecording();
-      await _controller.startVideoRecording();
-      setState(() => _isRecording = true);
-    }
+  void _recordVideo() {
+    Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => () async {
+              if (_isRecording) {
+                final file = await _controller.stopVideoRecording();
+                setState(() => _isRecording = false);
+                final route = MaterialPageRoute(
+                  fullscreenDialog: true,
+                  builder: (_) => VideoPage(filePath: file.path),
+                );
+                Navigator.push(context, route);
+              } else {
+                await _controller.prepareForVideoRecording();
+                await _controller.startVideoRecording();
+                setState(() => _isRecording = true);
+              }
+            });
   }
+
+  // void trimVideo() {}
 }
 
 class VideoPage extends StatefulWidget {
