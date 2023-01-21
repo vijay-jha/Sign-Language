@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 class TakePictureScreen extends StatefulWidget {
   const TakePictureScreen({
@@ -21,6 +22,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   late Future<void> _initializeControllerFuture;
   late CameraDescription currentCamera;
   bool isFront = false;
+  bool _isRecording = false;
 
   @override
   void initState() {
@@ -54,62 +56,109 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Take a picture')),
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            // If the Future is complete, display the preview.
-            return CameraPreview(_controller);
-          } else {
-            // Otherwise, display a loading indicator.
-            return const Center(child: CircularProgressIndicator());
-          }
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        // Provide an onPressed callback.
-        onPressed: () async {
-          // Take the Picture in a try / catch block. If anything goes wrong,
-          // catch the error.
-          try {
-            // Ensure that the camera is initialized.
-            await _initializeControllerFuture;
+        appBar: AppBar(title: const Text('Take a picture')),
+        body: FutureBuilder<void>(
+          future: _initializeControllerFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done) {
+              return CameraPreview(_controller);
+            } else {
+              return const Center(child: CircularProgressIndicator());
+            }
+          },
+        ),
+        floatingActionButton: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            FloatingActionButton(
+              onPressed: () async {
+                try {
+                  await _initializeControllerFuture;
+                  toggleCamera();
+                } catch (e) {}
+              },
+              child: const Icon(Icons.flip_camera_android_sharp),
+            ),
+            FloatingActionButton(
+              onPressed: () async {
+                try {
+                  await _initializeControllerFuture;
+                  _recordVideo();
+                } catch (e) {}
+              },
+              child: const Icon(Icons.circle_outlined),
+            ),
+          ],
+        ));
+  }
 
-            toggleCamera();
-
-            // final image = await _controller.takePicture();
-            // if (!mounted) return;
-
-            // If the picture was taken, display it on a new screen.
-            // await Navigator.of(context).push(
-            //   MaterialPageRoute(
-            //     builder: (context) => DisplayPictureScreen(
-            //       imagePath: image.path,
-            //     ),
-            //   ),
-            // );
-          } catch (e) {}
-        },
-        child: const Icon(Icons.camera_alt),
-      ),
-    );
+  void _recordVideo() async {
+    if (_isRecording) {
+      final file = await _controller.stopVideoRecording();
+      setState(() => _isRecording = false);
+      final route = MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => VideoPage(filePath: file.path),
+      );
+      Navigator.push(context, route);
+    } else {
+      await _controller.prepareForVideoRecording();
+      await _controller.startVideoRecording();
+      setState(() => _isRecording = true);
+    }
   }
 }
 
-// A widget that displays the picture taken by the user.
-class DisplayPictureScreen extends StatelessWidget {
-  final String imagePath;
+class VideoPage extends StatefulWidget {
+  final String filePath;
 
-  const DisplayPictureScreen({super.key, required this.imagePath});
+  const VideoPage({Key? key, required this.filePath}) : super(key: key);
+
+  @override
+  _VideoPageState createState() => _VideoPageState();
+}
+
+class _VideoPageState extends State<VideoPage> {
+  late VideoPlayerController _videoPlayerController;
+
+  @override
+  void dispose() {
+    _videoPlayerController.dispose();
+    super.dispose();
+  }
+
+  Future _initVideoPlayer() async {
+    _videoPlayerController = VideoPlayerController.file(File(widget.filePath));
+    await _videoPlayerController.initialize();
+    await _videoPlayerController.setLooping(true);
+    await _videoPlayerController.play();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Display the Picture')),
-      // The image is stored as a file on the device. Use the `Image.file`
-      // constructor with the given path to display the image.
-      body: Image.file(File(imagePath)),
+      appBar: AppBar(
+        title: const Text('Preview'),
+        elevation: 0,
+        backgroundColor: Colors.black26,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.check),
+            onPressed: () {},
+          )
+        ],
+      ),
+      extendBodyBehindAppBar: true,
+      body: FutureBuilder(
+        future: _initVideoPlayer(),
+        builder: (context, state) {
+          if (state.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else {
+            return VideoPlayer(_videoPlayerController);
+          }
+        },
+      ),
     );
   }
 }
